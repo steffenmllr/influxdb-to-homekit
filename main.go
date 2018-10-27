@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -118,6 +117,16 @@ func NewInfoAccessory(c AccessoriesConfig) *Accessory {
 	return &Accessory{a, svc}
 }
 
+func getQueryValue(ic client.Client, c AccessoriesConfig) int {
+	q := client.NewQuery(c.Query, c.Database, "ns")
+	if response, err := ic.Query(q); err == nil && response.Error() == nil {
+		newValue, _ := response.Results[0].Series[0].Values[0][1].(json.Number).Int64()
+		return int(newValue)
+	}
+
+	return 0
+}
+
 var config Config
 
 func main() {
@@ -147,15 +156,13 @@ func main() {
 	allAccessories := make([]*accessory.Accessory, len(config.Accessories))
 	for i, acc := range config.Accessories {
 		infoAcc := NewInfoAccessory(acc)
+		currentValue := getQueryValue(iclient, acc)
+		infoAcc.Info.Info.SetValue(currentValue)
 		ticker := time.NewTicker(time.Second * acc.Update)
 		go func() {
-			for t := range ticker.C {
-				fmt.Println("Tick at", t)
-				q := client.NewQuery(acc.Query, acc.Database, "ns")
-				if response, err := iclient.Query(q); err == nil && response.Error() == nil {
-					newValue, _ := response.Results[0].Series[0].Values[0][1].(json.Number).Int64()
-					infoAcc.Info.Info.SetValue(int(newValue))
-				}
+			for _ = range ticker.C {
+				newValue := getQueryValue(iclient, acc)
+				infoAcc.Info.Info.SetValue(newValue)
 			}
 		}()
 
