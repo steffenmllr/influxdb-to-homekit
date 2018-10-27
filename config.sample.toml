@@ -1,0 +1,18 @@
+[influx]
+addr="http://localhost:8086"
+username="username"
+password="password"
+
+[[accessories]]
+name="fast.com"
+description="speedtest"
+unit="MB/s"
+query="SELECT download FROM speedtest where provider='fast.com' ORDER BY ASC LIMIT 1"
+database="speedtests"
+update=25
+
+[homekit]
+name="Dashboard"
+pin="12344321"
+port="12345"
+storage="./db"
