@@ -5,13 +5,20 @@ password="password"
 
 [[accessories]]
 name="fast.com"
-description="speedtest"
+description="speedtest from fast.com"
 unit="MB/s"
-query="SELECT download FROM speedtest where provider='fast.com' ORDER BY ASC LIMIT 1"
+query="SELECT LAST(download) FROM speedtest where provider='fast.com'"
 database="speedtests"
-update=25
+
+[[accessories]]
+name="speedtest Ø"
+description="speedtest mean"
+unit="MB/s"
+query="SELECT mean(download) FROM speedtest WHERE time > now() - 1h"
+database="speedtests"
 
 [homekit]
+update=10
 name="Dashboard"
 pin="12344321"
 port="12345"

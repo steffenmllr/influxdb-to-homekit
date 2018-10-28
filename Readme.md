@@ -1,5 +1,5 @@
 # Influxdb-to-homekit
-> Display query results as Homekit Accessories
+> Display query results as Homekit Accessories 
 
 
 ## Automated Build

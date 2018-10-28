@@ -35,12 +35,12 @@ type AccessoriesConfig struct {
 	Unit        string
 	Query       string
 	Database    string
-	Update      time.Duration
 }
 
 type HomekitConfig struct {
 	Name         string
 	Model        string
+	Update       time.Duration
 	Manufacturer string
 	SerialNumber string
 	Pin          string
@@ -103,7 +103,8 @@ func NewInfoService(name string, description string, unit string) *InfoService {
 type Accessory struct {
 	*accessory.Accessory
 
-	Info *InfoService
+	Info   *InfoService
+	Config AccessoriesConfig
 }
 
 func NewInfoAccessory(c AccessoriesConfig) *Accessory {
@@ -114,20 +115,29 @@ func NewInfoAccessory(c AccessoriesConfig) *Accessory {
 	svc := NewInfoService(c.Name, c.Description, c.Unit)
 	a.AddService(svc.Service)
 
-	return &Accessory{a, svc}
+	return &Accessory{a, svc, c}
 }
 
 func getQueryValue(ic client.Client, c AccessoriesConfig) int {
 	q := client.NewQuery(c.Query, c.Database, "ns")
 	if response, err := ic.Query(q); err == nil && response.Error() == nil {
-		newValue, _ := response.Results[0].Series[0].Values[0][1].(json.Number).Int64()
+		newValue, _ := response.Results[0].Series[0].Values[0][1].(json.Number).Float64()
 		return int(newValue)
 	}
 
 	return 0
 }
 
+func Update(iclient client.Client) {
+	for _, acc := range allAccessories {
+		currentValue := getQueryValue(iclient, acc.Config)
+		acc.Info.Info.SetValue(currentValue)
+	}
+}
+
 var config Config
+var updateTicker *time.Ticker
+var allAccessories []*Accessory
 
 func main() {
 	log.Debug.Enable()
@@ -153,20 +163,11 @@ func main() {
 		log.Info.Panic("Error pinging InfluxDB Cluster: ", err.Error())
 	}
 
-	allAccessories := make([]*accessory.Accessory, len(config.Accessories))
-	for i, acc := range config.Accessories {
+	for _, acc := range config.Accessories {
 		infoAcc := NewInfoAccessory(acc)
 		currentValue := getQueryValue(iclient, acc)
 		infoAcc.Info.Info.SetValue(currentValue)
-		ticker := time.NewTicker(time.Second * acc.Update)
-		go func() {
-			for _ = range ticker.C {
-				newValue := getQueryValue(iclient, acc)
-				infoAcc.Info.Info.SetValue(newValue)
-			}
-		}()
-
-		allAccessories[i] = infoAcc.Accessory
+		allAccessories = append(allAccessories, infoAcc)
 	}
 
 	hkConfig := hc.Config{
@@ -175,7 +176,19 @@ func main() {
 		StoragePath: config.Homekit.StoragePath,
 	}
 
-	t, err := hc.NewIPTransport(hkConfig, NewBridge(config.Homekit).Accessory, allAccessories...)
+	mainAccessories := make([]*accessory.Accessory, len(allAccessories))
+	for i, acc := range allAccessories {
+		mainAccessories[i] = acc.Accessory
+	}
+	t, err := hc.NewIPTransport(hkConfig, NewBridge(config.Homekit).Accessory, mainAccessories...)
+
+	updateTicker = time.NewTicker(time.Minute * config.Homekit.Update)
+
+	go func() {
+		for _ = range updateTicker.C {
+			Update(iclient)
+		}
+	}()
 
 	if err != nil {
 		log.Info.Panic(err)
