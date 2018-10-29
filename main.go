@@ -121,8 +121,10 @@ func NewInfoAccessory(c AccessoriesConfig) *Accessory {
 func getQueryValue(ic client.Client, c AccessoriesConfig) int {
 	q := client.NewQuery(c.Query, c.Database, "ns")
 	if response, err := ic.Query(q); err == nil && response.Error() == nil {
-		newValue, _ := response.Results[0].Series[0].Values[0][1].(json.Number).Float64()
-		return int(newValue)
+		if len(response.Results[0].Series) > 0 {
+			newValue, _ := response.Results[0].Series[0].Values[0][1].(json.Number).Float64()
+			return int(newValue)
+		}
 	}
 
 	return 0
